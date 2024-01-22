@@ -1,2 +1,3 @@
-# Project Files for Complex System Simulation
-Group 11.
+# Project Files for Group 11
+
+For the MSc course 'Complex System Simulation' at the University of Amsterdam.
