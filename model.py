@@ -60,10 +60,12 @@ class Simulation(Population):
         self.timestep = 0
 
 
-    def run(self, tot_timesteps=100, mechanism='IN', epsilon=0.5):
+    def iterate(self, tot_timesteps=100, mechanism='IN', epsilon=0.5):
         '''
-        Runs the simulation.
+        Executes 1 timestep of the simulation.
         '''
+        # TODO: END FUNCTION IF T = T + 1
+
         self.tot_timesteps = tot_timesteps
         
         # 1. Degradation:   every timestep, select a random node and decrease strength by 1:
@@ -77,13 +79,13 @@ class Simulation(Population):
         #
         # Repeat step 2. until no more failures occur 
         self.cascade(mechanism)
-
-        #
+        
         # 3. Repair: all failed nodes become unfailed (weak remains weak, strong remains strong)
         self.repair()
 
         # 4. Reinforcement:   every weak node that was repaired in step 3. has probability `epsilon`` to become strong
         self.reinforce(epsilon)
+        
         # Return to step 1. with t = t + 1
 
     
@@ -181,17 +183,7 @@ class Simulation(Population):
                 print('Node {} remained weak.'.format(node))
 
 
-    # Nodes self-organize to be weak (1) or strong (2)
-    # Weak nodes fail (0) as soon as 1 neighbor fails.
-    
-    # Either,
-    # Strong nodes never fail (0)
-    
-    # Or,
-    # Strong nodes fail (0) as soon as 2 neighbors fail.
-
-
 if __name__ == "__main__":
 
     example_simulation = Simulation(n_nodes=10, n_edges=50)
-    example_simulation.run(tot_timesteps=10, mechanism='IN', epsilon=0.5)
+    example_simulation.iterate(tot_timesteps=10, mechanism='IN', epsilon=0.5)
