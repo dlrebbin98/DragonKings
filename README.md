@@ -1,2 +1,2 @@
-# ComplexSystemSimulation
-Group 11 project files.
+# Project Files for Complex System Simulation
+Group 11.
