@@ -1,79 +1,197 @@
 import random
 
 import numpy as np
+import scipy.sparse as sp
 
 
-class Network:
+class Population:
     
-
-    def __init__(self, n_nodes, pr_edge=None, n_edges=None):
-        
+    '''
+    A population of agents.
+    '''
+    
+    def __init__(self, n_nodes):
+        '''
+        Initializes a network with `n_nodes` nodes and `n_edges` edges.
+        '''
         self.n_nodes = n_nodes
-        self.n_edges = n_edges
+        self.nodes = np.arange(n_nodes)
         
-        if pr_edge:
-            self.pr_edge = pr_edge
-            self.network = self.generate_random_network()
-        elif n_edges:
-            self.network = self.generate_random_network_w_edge()
+        self.edges = None
 
 
-    def generate_random_network(self):
+    def set_edges(self, n_edges, verbose=False):
+        '''
+        Sets `n_edges` edges between random node pairs.
+        '''
+        # TODO: Add (preferential) probability options
+        i = np.random.randint(0, self.n_nodes, size=n_edges)
+        j = np.random.randint(0, self.n_nodes, size=n_edges)
+        self.edges = np.vstack((i, j)).T
         
-        network = {}
-
-        # TODO: move to __init__
-        for i in range(self.n_nodes):
-            network[i] = set()
-        
-        # TODO: replace with numpy
-        for node1 in range(self.n_nodes):
-            for node2 in range(self.n_nodes):
-                if node1 != node2 and random.random() < self.pr_edge:
-                    network[node1].add(node2)
-                    network[node2].add(node1)
+        if verbose:
+            print('Edges set:')
+            print(self.edges)
 
 
-    def generate_random_network_w_edge(self):
-        
-        network = {}
-        
-        for i in range(self.n_nodes):
-            network[i] = set()
-        
-        # TODO: replace with numpy.random.choice
-        for _ in range(self.n_edges):
-            node1 = random.randint(0, self.n_nodes - 1)
-            node2 = random.randint(0, self.n_nodes - 1)
-            network[node1].add(node2)
-            network[node2].add(node1)
-        
-        return network
+    def get_state(self) -> np.ndarray:
+        '''
+        Returns the current state of the network.
+        '''
+        return self.edges
 
 
-    def _get_adjacency_matrix(self):
+class Simulation(Population):
+    
+    '''
+    Failure-based resource allocation simulation by Lin et al (2018).
+    '''
+    
+    def __init__(self, n_nodes, n_edges):
+        '''
+        Initializes a network with `n_nodes` nodes and `n_edges` edges.
+        '''
+        super().__init__(n_nodes)
+
+        # TODO: Make edges a sparse matrix
+        self.set_edges(n_edges=n_edges, verbose=True)
         
-        matrix = np.zeros((self.n_nodes, self.n_nodes))
+        self.node_status = np.ones(n_nodes) # 0 = failure, 1 = weak, 2 = strong; initialize all as weak
+        self.timestep = 0
+
+
+    def run(self, tot_timesteps=100, mechanism='IN', epsilon=0.5):
+        '''
+        Runs the simulation.
+        '''
+        self.tot_timesteps = tot_timesteps
         
-        for node1 in self.network:
-            for node2 in self.network[node1]:
-                matrix[node1][node2] = 1
+        # 1. Degradation:   every timestep, select a random node and decrease strength by 1:
+        #    if strength = 1:    node fails; repeat step 1. with t = t + 1
+        #    elif strength = 2:    node becomes weak; continue to step 2.
+        self.degrade()
+         
+        # 2. Cascade:   apply IN or CC failure-spreading mechanism, failed nodes remain failed during cascade
+        #    if IN:   strong nodes cannot fail
+        #    if CC:   strong nodes with 2 or more neighbors fail
+        #
+        # Repeat step 2. until no more failures occur 
+        self.cascade(mechanism)
+
+        #
+        # 3. Repair: all failed nodes become unfailed (weak remains weak, strong remains strong)
+        self.repair()
+
+        # 4. Reinforcement:   every weak node that was repaired in step 3. has probability `epsilon`` to become strong
+        self.reinforce(epsilon)
+        # Return to step 1. with t = t + 1
+
+    
+    def degrade(self):
+        '''
+        Degrades the network until a node fails. 
         
-        return matrix
+        At each timestep, randomly select a node 
+        and decrease its strength by 1:
+
+            If strength == 1, t = t + 1 and repeat.
+            
+            If strength == 0, break.
+        '''
+        self.original_node_status = self.node_status.copy()
+        while True:
+            # select a random node and decrease strength by 1:
+            node = random.choice(self.nodes)
+            self.node_status[node] -= 1
+
+            status = self.node_status[node]
+            if status == 0:
+                self.failed_node = node
+                print('Node {} failed during timestep {}.'.format(node, self.timestep + 1))
+                break
+            
+            self.timestep += 1
+            print('Node {} became weak at timestep {}.'.format(node, self.timestep))
+        
+        print('Degrading finished.')
     
 
-    def _get_degree_vector(self):
-        
-        vector = np.zeros(self.n_nodes)
-        
-        for node in self.network:
-            vector[node] = len(self.network[node])
-        
-        return vector
+    def cascade(self, mechanism):
+        if mechanism == 'IN':
+            self.in_cascade()
+        elif mechanism == 'CC':
+            self.cc_cascade()
     
+
+    def in_cascade(self):
+        '''
+        Applies the IN failure-spreading mechanism.
+        
+        Strong nodes never fail.
+        '''
+        print('Finding failed edges...')
+        while True:
+            self.failed_edges = np.array([edge for edge in self.edges if self.failed_node in edge])
+            print('Failed edges:')
+            print(self.failed_edges)
+            
+            values, counts = np.unique(self.failed_edges, return_counts=True)        
+            failed_nodes = values[(counts > 1) & (self.node_status[values] == 1)]
+            print('Failed nodes:')
+            print(failed_nodes)
+
+            if failed_nodes.size > 0:
+                print('Node {} failed during timestep {}.'.format(failed_nodes[0], self.timestep + 1))
+                self.node_status[failed_nodes] = 0
+                print('repeating cascade...')
+            
+            else:
+                print('No more failures.')
+                break
+                
+
+    def cc_cascade(self):
+        '''
+        Applies the CC failure-spreading mechanism.
+        
+        Strong nodes with 2 or more neighbors that failed will also fail.
+        '''
+        pass
+    
+
+    def repair(self):
+        '''
+        Repairs all failed nodes.
+        '''
+        print('Repairing failed nodes...')
+        self.node_status = self.original_node_status
+
+    
+    def reinforce(self, epsilon):
+        '''
+        Applies the reinforcement mechanism.
+        '''
+        print('Reinforcing weak nodes...')
+        weak_nodes = np.where(self.node_status == 1)[0]
+        for node in weak_nodes:
+            if np.random.rand() < epsilon:
+                self.node_status[node] = 2
+                print('Node {} became strong.'.format(node))
+            else:
+                print('Node {} remained weak.'.format(node))
+
+
+    # Nodes self-organize to be weak (1) or strong (2)
+    # Weak nodes fail (0) as soon as 1 neighbor fails.
+    
+    # Either,
+    # Strong nodes never fail (0)
+    
+    # Or,
+    # Strong nodes fail (0) as soon as 2 neighbors fail.
 
 
 if __name__ == "__main__":
 
-    debug = Network(10, 10)
-    print(debug.network)
+    example_simulation = Simulation(n_nodes=10, n_edges=50)
+    example_simulation.run(tot_timesteps=10, mechanism='IN', epsilon=0.5)
