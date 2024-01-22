@@ -58,35 +58,36 @@ class Simulation(Population):
         
         self.node_status = np.ones(n_nodes) # 0 = failure, 1 = weak, 2 = strong; initialize all as weak
         self.timestep = 0
+        
+        self.failed_edges = None
+        self.failed_node = None
 
 
     def iterate(self, tot_timesteps=100, mechanism='IN', epsilon=0.5):
         '''
         Executes 1 timestep of the simulation.
         '''
-        # TODO: END FUNCTION IF T = T + 1
-
+        
         self.tot_timesteps = tot_timesteps
         
-        # 1. Degradation:   every timestep, select a random node and decrease strength by 1:
-        #    if strength = 1:    node fails; repeat step 1. with t = t + 1
-        #    elif strength = 2:    node becomes weak; continue to step 2.
-        self.degrade()
-         
-        # 2. Cascade:   apply IN or CC failure-spreading mechanism, failed nodes remain failed during cascade
-        #    if IN:   strong nodes cannot fail
-        #    if CC:   strong nodes with 2 or more neighbors fail
-        #
-        # Repeat step 2. until no more failures occur 
-        self.cascade(mechanism)
-        
-        # 3. Repair: all failed nodes become unfailed (weak remains weak, strong remains strong)
-        self.repair()
+        while self.timestep < self.tot_timesteps:
+            # 1. Degradation:   every timestep, select a random node and decrease strength by 1:
+            #    if strength = 1:    node fails; repeat step 1. with t = t + 1
+            #    elif strength = 2:    node becomes weak; continue to step 2.
+            self.degrade()
+            
+            # 2. Cascade:   apply IN or CC failure-spreading mechanism, failed nodes remain failed during cascade
+            #    if IN:   strong nodes cannot fail
+            #    if CC:   strong nodes with 2 or more neighbors fail
+            if self.failed_node:     
+                self.cascade(mechanism)
+                
+                # 3. Repair: all failed nodes become unfailed (weak remains weak, strong remains strong)
+                self.repair()
 
-        # 4. Reinforcement:   every weak node that was repaired in step 3. has probability `epsilon`` to become strong
-        self.reinforce(epsilon)
-        
-        # Return to step 1. with t = t + 1
+                # 4. Reinforcement:   every weak node that was repaired in step 3. has probability `epsilon`` to become strong
+                self.reinforce(epsilon)
+            
 
     
     def degrade(self):
@@ -100,21 +101,20 @@ class Simulation(Population):
             
             If strength == 0, break.
         '''
+        # select a random node and decrease strength by 1:
+        node = random.choice(self.nodes)
+        self.node_status[node] -= 1
         self.original_node_status = self.node_status.copy()
-        while True:
-            # select a random node and decrease strength by 1:
-            node = random.choice(self.nodes)
-            self.node_status[node] -= 1
 
-            status = self.node_status[node]
-            if status == 0:
-                self.failed_node = node
-                print('Node {} failed during timestep {}.'.format(node, self.timestep + 1))
-                break
-            
-            self.timestep += 1
-            print('Node {} became weak at timestep {}.'.format(node, self.timestep))
+        status = self.node_status[node]
         
+        if status == 1:
+            print('Node {} became weak at timestep {}.'.format(node, self.timestep))
+            return
+        
+        self.failed_node = node
+        self.timestep += 1
+        print('Node {} failed during timestep {}.'.format(node, self.timestep))
         print('Degrading finished.')
     
 
@@ -134,13 +134,15 @@ class Simulation(Population):
         print('Finding failed edges...')
         while True:
             self.failed_edges = np.array([edge for edge in self.edges if self.failed_node in edge])
-            print('Failed edges:')
-            print(self.failed_edges)
+            print('Found {} failed edges.'.format(self.failed_edges.shape[0]))
+            # print('Failed edges:')
+            # print(self.failed_edges)
             
             values, counts = np.unique(self.failed_edges, return_counts=True)        
             failed_nodes = values[(counts > 1) & (self.node_status[values] == 1)]
-            print('Failed nodes:')
-            print(failed_nodes)
+            print('Found {} failed nodes.'.format(failed_nodes.size))
+            # print('Failed nodes:')
+            # print(failed_nodes)
 
             if failed_nodes.size > 0:
                 print('Node {} failed during timestep {}.'.format(failed_nodes[0], self.timestep + 1))
@@ -150,7 +152,7 @@ class Simulation(Population):
             else:
                 print('No more failures.')
                 break
-                
+
 
     def cc_cascade(self):
         '''
@@ -166,24 +168,39 @@ class Simulation(Population):
         Repairs all failed nodes.
         '''
         print('Repairing failed nodes...')
-        self.node_status = self.original_node_status
+        self.failed_nodes = np.where(self.node_status != 0)[0]
+        print('Found {} failed nodes.'.format(self.failed_nodes.size))
+        print('Failed nodes:')
+        print(self.failed_nodes)
+
+        print('Repaired nodes:')
+        print(self.failed_nodes)
+
+        # TODO: FIX THIS SO THAT IT'S NOT STATIC
+        print('Reverting failed nodes to original status...')
+        print('Original node status:')
+        print(self.original_node_status[self.failed_nodes])
+        self.nodes[self.failed_nodes] = self.original_node_status[self.failed_nodes]
 
     
     def reinforce(self, epsilon):
         '''
         Applies the reinforcement mechanism.
         '''
-        print('Reinforcing weak nodes...')
-        weak_nodes = np.where(self.node_status == 1)[0]
+        print('Reinforcing repaired weak nodes...')
+        
+        weak_nodes = np.where(self.node_status[self.failed_nodes] == 1)[0]
         for node in weak_nodes:
             if np.random.rand() < epsilon:
-                self.node_status[node] = 2
-                print('Node {} became strong.'.format(node))
+                self.node_status[self.failed_nodes[node]] = 2
+                print('Node {} became strong.'.format(self.failed_nodes[node]))
             else:
-                print('Node {} remained weak.'.format(node))
+                print('Node {} remained weak.'.format(self.failed_nodes[node]))
+        print('Reinforcement finished.')
+        self.timestep += 1
 
 
 if __name__ == "__main__":
 
     example_simulation = Simulation(n_nodes=10, n_edges=50)
-    example_simulation.iterate(tot_timesteps=10, mechanism='IN', epsilon=0.5)
+    example_simulation.iterate(tot_timesteps=10, mechanism='IN', epsilon=0.6)
