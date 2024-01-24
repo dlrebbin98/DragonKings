@@ -78,7 +78,6 @@ class Inoculation:
         -----------
         Runs the simulation.
         '''
-        self._visualize_network()
         # Loop through trials
         for trial in np.arange(self.n_trials):
             
@@ -91,12 +90,13 @@ class Inoculation:
                 
                 # Execute a single step
                 self.step()
+
+                # Visualize the network at the current step
+                self._visualize_network()
             
             # # Save the results
             # self.results[trial] = self.network.get_all_statuses()
             # self.network.reset()
-
-        self._visualize_network()
 
     
     def step(self):
@@ -199,5 +199,7 @@ def complex_contagion():
 if __name__ == "__main__":
 
     ### EXAMPLE USAGE ###
-    simulation = Inoculation(n_nodes=100, n_edges=300_000, epsilon=0.2, n_steps=1, n_trials=1, verbose=True)
+    simulation = Inoculation(n_nodes=10, n_edges=30, epsilon=0.2, n_steps=1, n_trials=1, verbose=True)
+    # Visualize the network at t = 0
+    simulation._visualize_network()
     simulation.run()
