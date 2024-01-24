@@ -100,12 +100,14 @@ class NodeNetworkSimulator:
     def repair_nodes(self):
         '''
         Repair all failed nodes.
+        
+        TODO: Refactor to include CC version
         '''
         for node in self.network.nodes:
             self.network.nodes[node]['status'] = 1 if np.random.rand() > self.epsilon else 2
 
 
-    def get_failure_size(self):
+    def _get_failure_size(self):
         '''
         Returns the proportion of nodes with status = 0.
         '''
@@ -115,7 +117,7 @@ class NodeNetworkSimulator:
         return rel_size
 
 
-    def visualize_network(self):
+    def _visualize_network(self):
         '''
         Visualize the network with yellow nodes representing
         weak nodes and red nodes representing strong nodes.
@@ -140,13 +142,14 @@ class NodeNetworkSimulator:
             # print(f"Time Step: {self.current_step}, n_nodes: {self.number_of_nodes}, n_edges: {self.network.number_of_edges()}, n_weak: {len([node for node in self.network.nodes if self.network.nodes[node]['status'] == 1])}, n_strong: {len([node for node in self.network.nodes if self.network.nodes[node]['status'] == 2])}", end='\r')
 
             # update the status of a random node
+            # TODO: Refactor this dirty solution:
             node = self.random_node()
             failed = self.update_status(node, -1)  # returns True if updated node failed
             if failed:
                 while self.process_neighbors():
                     pass
                 
-                rel_size = self.get_failure_size()
+                rel_size = self._get_failure_size()
                 failure_sizes.append(rel_size)
                 print(f'Relative failure size: {rel_size}               ', end='\r')
                 self.repair_nodes()
@@ -155,17 +158,20 @@ class NodeNetworkSimulator:
 
         return failure_sizes
             
+# sim = NodeNetworkSimulator(n_nodes=20_000)
+# sim.simulate(steps=10_000)
 
-# Usage
-def run_multiple_sims():
-    for n_nodes in [10, 100, 1_000, 10_000]:
-        for episolon in np.linspace(0, 0.1, 11):
-            simulation = NodeNetworkSimulator(n_nodes=n_nodes, pr_edge=0.1, epsilon=episolon)
-            failure_sizes = np.mean(simulation.simulate(100))
-            print(f'Average relative failure size: {failure_sizes} for episolon = {simulation.epsilon}')
+# # Usage
+# def run_multiple_sims():
+#     for n_nodes in [10, 100, 1_000, 10_000]:
+#         for episolon in np.linspace(0, 0.1, 11):
+simulation = NodeNetworkSimulator(n_nodes=2000, pr_edge=0.1, epsilon=0.2)
+simulation.simulate(100)
 
-            # save results to file
-            with open(f'size_{n_nodes}.txt', 'a') as f:
-                f.write(f'{simulation.epsilon},{failure_sizes}\n')
+# print(f'Average relative failure size: {failure_sizes} for episolon = {simulation.epsilon}')
 
-run_multiple_sims()
+            # # save results to file
+            # with open(f'size_{n_nodes}.txt', 'a') as f:
+            #     f.write(f'{simulation.epsilon},{failure_sizes}\n')
+
+# run_multiple_sims()
