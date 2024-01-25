@@ -5,8 +5,8 @@ The model consists of two versions:
     1. Inoculation or IN:
         a. Nodes of status 1 (weak) fail if 1 or more neighbors fail.
         b. Nodes of status 2 (strong) cannot fail.
-
-    2. Complex contagion or CC:
+    
+    2. TODO Complex contagion or CC:
         a. Nodes of status 1 (weak) fail if 1 or more neighbors fail.
         b. Nodes of status 2 (strong) fail if 2 or more neighbors fail.
 
@@ -28,7 +28,7 @@ class Inoculation:
     Class to simulate the inoculation version of the self-organized dragon king model.
     '''
 
-    def __init__(self, n_nodes, n_edges=None, pr_edge=None, epsilon=0.2, n_steps=1000, n_trials=100, verbose=False):
+    def __init__(self, n_steps, n_trials, n_nodes, n_edges=None, pr_edge=None, epsilon=0.2, verbose=False, visualize=False, export_results=False):
         '''
         Description
         -----------
@@ -36,6 +36,10 @@ class Inoculation:
 
         Parameters
         ----------
+        `n_steps` : int
+            The number of steps in a trial.
+        `n_trials` : int
+            The number of trials.
         `n_nodes` : int
             The number of nodes in the network.
         `n_edges` : int
@@ -44,10 +48,13 @@ class Inoculation:
             The probability that two nodes will be connected.
         `epsilon` : float
             The probability that a weak node will be repaired as strong.
-        `n_steps` : int
-            The number of steps in a trial.
-        `n_trials` : int
-            The number of trials.
+        `verbose` : bool
+            Whether whether, per step, progression should be broadcasted. Replaces the default progress bar. 
+        `visualize` : 
+            Whether, per step, progression should be plotted. CAUTION only use with very small `n_nodes`.
+        `export_results` : str or False
+            Whether the results should be exported to a csv file. If `False` (default), no export will take place. 
+            Otherwise, the string should contain the path to the export directory (see example usage).
         '''
 
         # Initialize the network
@@ -69,8 +76,10 @@ class Inoculation:
         # Initialize the current step
         self.time = 0
 
-        # Initialize the verbose flag
+        # Initialize flags
         self.verbose = verbose
+        self.visualize = visualize
+        self.export_results = export_results
 
     def run(self):
         '''
@@ -87,10 +96,14 @@ class Inoculation:
                 # Update the current step
                 self.time = step
 
-                print(f"Starting trial {trial} of {self.n_trials}  |  Step {step} of {self.n_steps}")
+                if not self.verbose:
+                    # If verbose is False (default), display a progress bar
+                    print(f"Starting trial {trial} of {self.n_trials}  |  Step {step} of {self.n_steps}               ", end='\r')
                 
                 # Execute a single step
                 self.step()
+
+        print('\nSimulation completed.')
             
             # # Save the results
             # self.results[trial] = self.network.get_all_statuses()
@@ -110,7 +123,6 @@ class Inoculation:
         # Degrade a node at random
         degrade(self.network, random=True)
 
-        # Check for failed nodes
         if self.contains_failed_nodes():
             
             # Cascade failures until no more failures occur
@@ -122,11 +134,12 @@ class Inoculation:
             # Reinforce some of the failed nodes with status 1 given epsilon
             reinforce(self.network, failed_nodes, self.epsilon)
 
-            return self._visualize_network()
+            if self.visualize:
+                return self._visualize_network()
 
-        # If no failed nodes, move on to next step
+        # Otherwise (i.e. no failure), end the step
         else:
-            return self._visualize_network()
+            return self._visualize_network() if self.visualize else None
     
 
     def cascade_failures(self):
@@ -167,7 +180,7 @@ class Inoculation:
             current_state = np.array(list(self.network.get_all_statuses().values()))
 
             # Visualize network
-            self._visualize_network()
+            self._visualize_network() if self.visualize else None
         
         return failed_nodes
 
@@ -220,6 +233,15 @@ class Inoculation:
         plt.show()
 
 
+    def _export_results(self):
+        '''
+        Description
+        -----------
+        Exports the results to a csv file.
+        '''
+        pass
+
+
 
 def complex_contagion():
     pass
@@ -228,7 +250,19 @@ def complex_contagion():
 if __name__ == "__main__":
 
     ### EXAMPLE USAGE ###
-    simulation = Inoculation(n_nodes=10, n_edges=30, epsilon=0.2, n_steps=1, n_trials=1, verbose=False)
-    # Visualize the network at t = 0
-    simulation._visualize_network()
+    simulation = Inoculation(
+        n_steps=3, 
+        n_trials=1, 
+        n_nodes=10_000,  # N^5
+        n_edges=30_000, 
+        pr_edge=False,
+        epsilon=0.2, 
+        verbose=False, 
+        visualize=False,
+        export_results='exports/'
+    )
+
+    # # Visualize the network at t = 0
+    # simulation._visualize_network()
+    
     simulation.run()
