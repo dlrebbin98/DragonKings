@@ -131,16 +131,29 @@ class Inoculation:
         -----------
         Cascades failures until no more failures occur.
         '''
-        # Initialize previous state
-        previous_state = None
-        while previous_state != self.network.get_all_statuses():
+        # Get current statuses as values
+        current_state = np.array(list(self.network.get_all_statuses().values()))
+
+        # Initialize previous state to save
+        previous_state = np.zeros_like(current_state)
+        
+        while (previous_state != current_state).all:
+            
+            # Update previous state
+            previous_state = current_state
+            
             # Find failed nodes
-            print(np.array(self.network.get_all_statuses()) == 0) if self.verbose else None
-            failed_nodes = np.argwhere(np.array(self.network.get_all_statuses()) == 0)
-            print(f"Found the following failured nodes: {failed_nodes}") if self.verbose else None
+            failed_nodes = np.where(current_state==0)[0]
+            
+            # Locate neighbors of status one
+            neighbors = self.network.get_multiple_neighbors(failed_nodes)
+            
+            print(self.network.get_weak_neighbors(failed_nodes))
+            
             break
-            # previous_state = save_state(self.network)
-            # self.process_neighbors()
+            # neighbors = neighbors.value
+
+            # Fail all neighbors with status 1
 
 
     def contains_failed_nodes(self):
