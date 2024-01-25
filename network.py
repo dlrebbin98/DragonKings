@@ -115,9 +115,6 @@ class Network:
 			neighbors.append(self.get_neighbors(node)) if not as_list else neighbors.append(list(self.graph.neighbors(node)))
 		return neighbors
 
-	def get_weak_neighbors(self, nodes):
-		neighbors = self.get_multiple_neighbors(nodes)
-		print({k:v for k, v in neighbors.items() == 1})
 
 if __name__ == "__main__":
 	

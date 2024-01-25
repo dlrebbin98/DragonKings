@@ -84,6 +84,21 @@ def load_state(network:Network, previous_state):
 	network.set_all_statuses(previous_state)
 
 
+def reinforce(network:Network, nodes, epsilon):
+	'''
+	Description
+	-----------
+	Reinforce failed an array of nodes with probability epsilon.
+
+	TODO add numpy enhancement to remove this additional loop (use an array of probabilities)
+	'''
+	for node in nodes:
+		if np.random.rand() < epsilon:
+			network.set_status(node, 2)
+		else:
+			network.set_status(node, 1)
+
+
 if __name__ == "__main__":
 	
 	### EXAMPLE USAGE ###

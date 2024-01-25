@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 
 from network import Network
-from network_modifier import degrade, fail, save_state, load_state
+from network_modifier import degrade, fail, save_state, load_state, reinforce
 
 
 class Inoculation:
@@ -67,7 +67,7 @@ class Inoculation:
         self.n_trials = n_trials
         
         # Initialize the current step
-        self.current_step = 0
+        self.time = 0
 
         # Initialize the verbose flag
         self.verbose = verbose
@@ -79,20 +79,18 @@ class Inoculation:
         Runs the simulation.
         '''
         # Loop through trials
-        for trial in np.arange(self.n_trials):
+        for trial in np.arange(1, self.n_trials + 1):
             
             # Loop through the number of steps
             for step in np.arange(1, self.n_steps + 1):
                 
                 # Update the current step
-                self.current_step = step
-                print(f"Starting trial {trial} of {self.n_trials}  |  Step {step} of {self.n_steps}") if self.verbose else None
+                self.time = step
+
+                print(f"Starting trial {trial} of {self.n_trials}  |  Step {step} of {self.n_steps}")
                 
                 # Execute a single step
                 self.step()
-
-                # Visualize the network at the current step
-                self._visualize_network()
             
             # # Save the results
             # self.results[trial] = self.network.get_all_statuses()
@@ -116,13 +114,19 @@ class Inoculation:
         if self.contains_failed_nodes():
             
             # Cascade failures until no more failures occur
-            self.cascade_failures()
+            failed_nodes = self.cascade_failures()
 
-            return
-        
+            # Repair nodes
+            load_state(self.network, before_degrade)
+
+            # Reinforce some of the failed nodes with status 1 given epsilon
+            reinforce(self.network, failed_nodes, self.epsilon)
+
+            return self._visualize_network()
+
         # If no failed nodes, move on to next step
         else:
-            return
+            return self._visualize_network()
     
 
     def cascade_failures(self):
@@ -130,6 +134,10 @@ class Inoculation:
         Description
         -----------
         Cascades failures until no more failures occur.
+
+        Returns
+        -------
+        An array containing all failed nodes of status 1.
         '''
         # Get current statuses as values
         current_state = np.array(list(self.network.get_all_statuses().values()))
@@ -137,7 +145,9 @@ class Inoculation:
         # Initialize previous state to save
         previous_state = np.zeros_like(current_state)
         
-        while (previous_state != current_state).all:
+        # Cycle until no more changes in status occur
+        # TODO refactor to eliminate additional cycle after all nodes have failed
+        while not (previous_state == current_state).all():
             
             # Update previous state
             previous_state = current_state
@@ -145,15 +155,21 @@ class Inoculation:
             # Find failed nodes
             failed_nodes = np.where(current_state==0)[0]
             
-            # Locate neighbors of status one
-            neighbors = self.network.get_multiple_neighbors(failed_nodes)
+            # Locate neighbors
+            all_neighbors = self.network.get_multiple_neighbors(failed_nodes)
             
-            print(self.network.get_weak_neighbors(failed_nodes))
+            # Cycle through neighbors (multiple neighbors of multiple nodes) and locate weaklings
+            for neighbors in all_neighbors:
+                
+                fail(self.network, list(neighbors))
             
-            break
-            # neighbors = neighbors.value
+            # Update current_state
+            current_state = np.array(list(self.network.get_all_statuses().values()))
 
-            # Fail all neighbors with status 1
+            # Visualize network
+            self._visualize_network()
+        
+        return failed_nodes
 
 
     def contains_failed_nodes(self):
@@ -200,7 +216,7 @@ class Inoculation:
                 self.network.graph, 
                 node_color=['red' if self.network.graph.nodes[node]['status'] == 0 else ('yellow' if self.network.graph.nodes[node]['status'] == 1 else 'green') for node in self.network.graph.nodes]
                 )
-        plt.title(f"Time Step: {self.current_step}")
+        plt.title(f"Time Step: {self.time}")
         plt.show()
 
 
@@ -212,7 +228,7 @@ def complex_contagion():
 if __name__ == "__main__":
 
     ### EXAMPLE USAGE ###
-    simulation = Inoculation(n_nodes=10, n_edges=30, epsilon=0.2, n_steps=1, n_trials=1, verbose=True)
+    simulation = Inoculation(n_nodes=10, n_edges=30, epsilon=0.2, n_steps=1, n_trials=1, verbose=False)
     # Visualize the network at t = 0
     simulation._visualize_network()
     simulation.run()
