@@ -13,6 +13,7 @@ The model consists of two versions:
 Running this module as a script run an example.
 '''
 
+import json
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -28,7 +29,7 @@ class Inoculation:
     Class to simulate the inoculation version of the self-organized dragon king model.
     '''
 
-    def __init__(self, n_steps, n_trials, n_nodes, n_edges=None, pr_edge=None, epsilon=0.2, verbose=False, visualize=False, export_results=False):
+    def __init__(self, n_steps, n_trials, n_nodes, n_edges=None, pr_edge=None, epsilon=0.2, verbose=False, visualize=False, export_dir=None):
         '''
         Description
         -----------
@@ -52,9 +53,9 @@ class Inoculation:
             Whether whether, per step, progression should be broadcasted. Replaces the default progress bar. 
         `visualize` : 
             Whether, per step, progression should be plotted. CAUTION only use with very small `n_nodes`.
-        `export_results` : str or False
-            Whether the results should be exported to a csv file. If `False` (default), no export will take place. 
-            Otherwise, the string should contain the path to the export directory (see example usage).
+        `export_dir` : str
+            Whether the resulting failure size distributions should be exported. If `None` (default), no export will take place. 
+            Otherwise, the string should contain the path to the export directory (e.g. 'exports/').
         '''
 
         # Initialize the network
@@ -63,10 +64,6 @@ class Inoculation:
         
         # Initialize the state
         self.network.set_all_statuses(1)
-
-        # Initialize the results
-        results = np.zeros((n_trials, n_steps))
-        self.results = results.astype(int)
 
         # Initialize the parameters
         self.epsilon = epsilon
@@ -79,7 +76,12 @@ class Inoculation:
         # Initialize flags
         self.verbose = verbose
         self.visualize = visualize
-        self.export_results = export_results
+        self.export_dir = export_dir
+
+        # Initialize the export directory
+        if export_dir is not None:
+            self._initialize_results()
+
 
     def run(self):
         '''
@@ -88,28 +90,24 @@ class Inoculation:
         Runs the simulation.
         '''
         # Loop through trials
-        for trial in np.arange(1, self.n_trials + 1):
+        for self._itrial in np.arange(1, self.n_trials + 1):
             
             # Loop through the number of steps
-            for step in np.arange(1, self.n_steps + 1):
+            for self._istep in np.arange(1, self.n_steps + 1):
                 
-                # Update the current step
-                self.time = step
-
                 if not self.verbose:
                     # If verbose is False (default), display a progress bar
-                    print(f"Starting trial {trial} of {self.n_trials}  |  Step {step} of {self.n_steps}               ", end='\r')
+                    print(f"Starting trial {self._itrial} of {self.n_trials}  |  Step {self._istep} of {self.n_steps}               ", end='\r')
                 
                 # Execute a single step
                 self.step()
 
         print('\nSimulation completed.')
-            
-            # # Save the results
-            # self.results[trial] = self.network.get_all_statuses()
-            # self.network.reset()
+        
+        if self.exporting:
+            self._export_results()
+            print(f'Exported results to {self.export_dir}results.csv')
 
-    
     def step(self):
         '''
         Description
@@ -125,6 +123,9 @@ class Inoculation:
 
         if self.contains_failed_nodes():
             
+            # Store first failure size
+            # self._store_results(1, self.trial, step) if self.exporting else None
+
             # Cascade failures until no more failures occur
             failed_nodes = self.cascade_failures()
 
@@ -158,11 +159,13 @@ class Inoculation:
         # Initialize previous state to save
         previous_state = np.zeros_like(current_state)
         
+        # Start tracking cascade
+        self._initialize_cascade()  if self.exporting  else None
+        
         # Cycle until no more changes in status occur
         # TODO refactor to eliminate additional cycle after all nodes have failed
         while not (previous_state == current_state).all():
             
-            # Update previous state
             previous_state = current_state
             
             # Find failed nodes
@@ -173,15 +176,21 @@ class Inoculation:
             
             # Cycle through neighbors (multiple neighbors of multiple nodes) and locate weaklings
             for neighbors in all_neighbors:
-                
+
                 fail(self.network, list(neighbors))
-            
+
             # Update current_state
             current_state = np.array(list(self.network.get_all_statuses().values()))
 
             # Visualize network
             self._visualize_network() if self.visualize else None
-        
+
+            # Store current cascade iteration
+            self._store_cascade()  if self.exporting  else None
+
+        # Store results of step
+        self._store_step_results() if self.exporting else None
+
         return failed_nodes
 
 
@@ -200,20 +209,40 @@ class Inoculation:
         return 0 in self.network.get_all_statuses().values()
     
 
-    def _get_failure_size(self):
+    def _initialize_cascade(self):
         '''
         Description
         -----------
-        Returns the proportion of nodes with status = 0.
+        Initialize a failure size array.
         '''
-        status_values = self.network.get_all_statuses().values()
+        self.cascade_dict = {}
+        self.cascade_counter = -1
+        self._store_cascade()
+
+    def _get_cascade(self):
+        '''
+        Description
+        -----------
+        Returns the failure size and counter of current cascade.
+        '''
+        status_values = list(self.network.get_all_statuses().values())
         if len(status_values) != self.n_nodes:
             raise ValueError("Length of all statuses does not match the specified number of nodes.")
-        
+
         failures = status_values.count(0)
 
-        return failures / len(status_values)
-    
+        return self.cascade_counter, failures / len(status_values)
+
+    def _store_cascade(self):
+        '''
+        Description
+        -----------
+        Stores a value in the cascade dict.
+        '''
+        self.cascade_counter += 1
+        t, x = self._get_cascade()
+        self.cascade_dict[t] = x
+
 
     def _visualize_network(self):
         '''
@@ -233,14 +262,40 @@ class Inoculation:
         plt.show()
 
 
+    def _initialize_results(self):
+        '''
+        Description
+        -----------
+        Initializes the results array. 
+
+        Used to track failure sizes over time, starting from 1st node failure.
+
+        TODO switch to a pickle/file based approach to secure intermittent results.
+        '''
+        self.exporting = True
+        self.results = [[0]*self.n_steps]*self.n_trials
+
+    def _store_step_results(self):
+        '''
+        Description
+        -----------
+        Stores results of a step.
+        '''
+        self.results[self._itrial - 1][self._istep - 1] = self.cascade_dict
+        print(f"Stored result for trial {self._itrial} and step {self._istep}.") if self.verbose else None
+
     def _export_results(self):
         '''
         Description
         -----------
-        Exports the results to a csv file.
+        Exports stored results to csv file.
         '''
-        pass
-
+        with open(f'{self.export_dir}results.txt', 'w') as file:
+            for trial in np.arange(self.n_trials):
+                for step in np.arange(self.n_steps):
+                    # print(f"\nExporting result for trial {trial} and step {step}.")
+                    json.dump(self.results[trial][step], file)
+                    file.write('\n')
 
 
 def complex_contagion():
@@ -251,15 +306,15 @@ if __name__ == "__main__":
 
     ### EXAMPLE USAGE ###
     simulation = Inoculation(
-        n_steps=3, 
+        n_steps=10, 
         n_trials=1, 
-        n_nodes=10_000,  # N^5
-        n_edges=30_000, 
+        n_nodes=100_000,  # N^5
+        n_edges=300_000, 
         pr_edge=False,
         epsilon=0.2, 
         verbose=False, 
         visualize=False,
-        export_results='exports/'
+        export_dir='exports/'
     )
 
     # # Visualize the network at t = 0
