@@ -60,6 +60,8 @@ class Inoculation:
 
         # Initialize the network
         self.n_nodes = n_nodes
+        self.n_edges = n_edges
+        self.pr_edge = pr_edge
         self.network = Network(n_nodes, n_edges, pr_edge)
         
         # Initialize the state
@@ -102,11 +104,15 @@ class Inoculation:
                 # Execute a single step
                 self.step()
 
+            # Re-initialize the network
+            self.network = Network(self.n_nodes, self.n_edges, self.pr_edge)
+
         print('\nSimulation completed.')
         
         if self.exporting:
             self._export_results()
             print(f'Exported results to {self.export_dir}results.csv')
+
 
     def step(self):
         '''
@@ -219,6 +225,7 @@ class Inoculation:
         self.cascade_counter = -1
         self._store_cascade()
 
+
     def _get_cascade(self):
         '''
         Description
@@ -232,6 +239,7 @@ class Inoculation:
         failures = status_values.count(0)
 
         return self.cascade_counter, failures / len(status_values)
+
 
     def _store_cascade(self):
         '''
@@ -306,12 +314,12 @@ if __name__ == "__main__":
 
     ### EXAMPLE USAGE ###
     simulation = Inoculation(
-        n_steps=10, 
+        n_steps=1000, 
         n_trials=1, 
-        n_nodes=100_000,  # N^5
-        n_edges=300_000, 
+        n_nodes=10_000,  # N^5
+        n_edges=30_000, 
         pr_edge=False,
-        epsilon=0.2, 
+        epsilon=0.001, 
         verbose=False, 
         visualize=False,
         export_dir='exports/'
