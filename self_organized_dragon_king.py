@@ -168,8 +168,20 @@ class Inoculation:
         # Start tracking cascade
         self._initialize_cascade()  if self.exporting  else None
         
+        ### NOTE ###
+        # 
+        # The following cascading mechanism is a bit of a mess.
+        # 
+        # I think it can be simplified by circumventing the while loop
+        # and just focusing on the final state of the network.
+        #
+        # In particular, as we know the neighbors of each node, we can 
+        # concatenate all the neighbors and immediately adjust their 
+        # statuses.
+        # 
+        ############
+
         # Cycle until no more changes in status occur
-        # TODO refactor to eliminate additional cycle after all nodes have failed
         while not (previous_state == current_state).all():
             
             previous_state = current_state
