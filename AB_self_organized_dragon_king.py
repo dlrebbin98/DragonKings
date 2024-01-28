@@ -134,10 +134,11 @@ class Degree_Cascade:
         else:
             return self._visualize_network() if self.visualize else None
     
-    def recursive_cascade(self, node):
+    def recursive_cascade(self, node, damage):
         
         # Base case: Stop recursion if the node has already failed
-        if self.network.get_status(node) == 0:
+        if self.network.get_status(node) < 1:
+            self.network.set_status(node, 0)
             return
 
         # Locate neighbors
@@ -147,15 +148,14 @@ class Degree_Cascade:
         prev_status = self.network.get_status(node)
 
         # set status of failed node to 0
-        self.network.set_status(node, 0) 
-
-        # Store current cascade iteration
-        self._store_cascade()  if self.exporting  else None
+        degrade(self.network, node, damage) 
             
         # Cycle through neighbors (multiple neighbors of multiple nodes) and locate weaklings
         for neighbor in all_neighbors:
-            if self.network.get_status(neighbor) > 0 and self.network.get_status(neighbor) - prev_status < 1:
-                self.recursive_cascade(neighbor)
+            self.recursive_cascade(neighbor, prev_status)
+
+        # Store current cascade iteration
+        self._store_cascade()  if self.exporting  else None
 
     def cascade_failures(self, node):
         '''
@@ -172,7 +172,7 @@ class Degree_Cascade:
         self._initialize_cascade()  if self.exporting  else None
 
         # Call recursive failing function
-        self.recursive_cascade(node)
+        self.recursive_cascade(node, self.network.get_status(node))
 
         # Store results of step
         self._store_step_results() if self.exporting else None
@@ -240,10 +240,16 @@ class Degree_Cascade:
         yellow: weak nodes.  
         green: strong nodes.
         '''
-        nx.draw(
-                self.network.graph, 
-                node_color=['red' if self.network.graph.nodes[node]['status'] == 0 else ('yellow' if self.network.graph.nodes[node]['status'] == 1 else 'green') for node in self.network.graph.nodes]
-                )
+        # Extract node statuses
+        node_statuses = nx.get_node_attributes(self.network.graph, 'status')
+
+        # Map colors based on node statuses
+        node_colors = ['red' if status == 0 else ('yellow' if status == 1 else 'green') for status in node_statuses.values()]
+
+        # Draw the network with node labels
+        pos = nx.spring_layout(self.network.graph)  # You can use other layout algorithms
+        nx.draw(self.network.graph, pos, node_color=node_colors, with_labels=True, labels=node_statuses)
+        
         plt.title(f"Time Step: {self.time}")
         plt.show()
 
@@ -294,8 +300,8 @@ if __name__ == "__main__":
     simulation = Degree_Cascade(
         n_steps=1000, 
         n_trials=1, 
-        n_nodes=10,  # N^5
-        n_edges=3, 
+        n_nodes=100,  # N^5
+        n_edges=2, 
         n_failures = 1,
         verbose=False, 
         visualize=False,

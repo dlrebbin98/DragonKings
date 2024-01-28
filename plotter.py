@@ -9,7 +9,7 @@ def plot_results(n_nodes=10_000):
     plt.figure()
     plt.xlabel('s')
     plt.ylabel('Pr(s)')
-    # plt.xscale('log')
+    plt.xscale('log')
     plt.yscale('log')
     plt.title('Cascade Size Distribution')
     plt.grid(True)
@@ -21,7 +21,7 @@ def plot_results(n_nodes=10_000):
                 data = json.loads(line)
                 # plt.plot(np.array(list(data.values()))* n_nodes, list(data.values()))
                 plt.plot(dict(data).keys(), data.values())
-                # print(dict(data).keys())
+                # print((data).values())
             except:
                 # a zero entry is found
                 pass

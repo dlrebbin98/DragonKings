@@ -120,11 +120,11 @@ if __name__ == "__main__":
 	### EXAMPLE USAGE ###
 	
 	# Creating a network
-	network = Network(n=100_001, m=100)
-	nodes = np.array([1, 10, 100, 1_000, 10_000, 100_000])  # nodes to check status of
+	network = Network(n=101, m=3)
+	nodes = np.array([1, 10, 100])  # nodes to check status of
 	network.set_all_statuses() # sets all statuses according to their degree
 	print(f"Generated a network with {network.graph.number_of_nodes()} nodes and {network.graph.number_of_edges()} edges.")
-	print(f"Status of nodes 1, 10, 100, 1_000, 10_000, 100_000: {network.get_statuses(nodes)}")
+	print(f"Status of nodes 1, 10, 100: {network.get_statuses(nodes)}")
 
 	# Getting the neighbors of a specific node (WARNING: only use as_list=True for testing and illustration purposes, as it is a bottleneck)
 	neighbors = network.get_neighbors(10, as_list=True)
@@ -132,5 +132,5 @@ if __name__ == "__main__":
 
 	# Getting the neighbors of an array of nodes (WARNING: only use as_list=True for testing and illustration purposes, as it is a bottleneck)
 	neighbors = network.get_multiple_neighbors(nodes, as_list=True)
-	print(f"Neighbors of nodes 1, 10, 100, 1_000, 10_000, 100_000: {neighbors}")
+	print(f"Neighbors of nodes 1, 10, 100: {neighbors}")
 
