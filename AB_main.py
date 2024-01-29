@@ -1,16 +1,20 @@
 '''
-This module contains an altered implementation of the 'self-organized dragon king' model by Lin et al (2018).
+This module contains an implementation of the 'self-organized dragon king' model by Lin et al (2018).
 
-The model consists of a version where a given number of nodes are randomly selected to fail, setting their status to 0
-before all other neighbouring nodes are checked for whether their own status falls to 0 or below so that they fail themselves. 
-The cascade continues until no more node is induced to fail.
+The model consists of two versions:
+    1. Inoculation or IN:
+        a. Nodes of status 1 (weak) fail if 1 or more neighbors fail.
+        b. Nodes of status 2 (strong) cannot fail.
+    
+    2. TODO Complex contagion or CC:
+        a. Nodes of status 1 (weak) fail if 1 or more neighbors fail.
+        b. Nodes of status 2 (strong) fail if 2 or more neighbors fail.
 
 Running this module as a script run an example.
 '''
 
 import json
-import random
-
+import random 
 import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -25,7 +29,7 @@ class Degree_Cascade:
     Class to simulate the inoculation version of the self-organized dragon king model.
     '''
 
-    def __init__(self, n_steps, n_trials, n_nodes, n_edges=None, n_failures = None, threshold=None, verbose=False, visualize=False, export_dir=None):
+    def __init__(self, n_steps, n_trials, n_nodes, n_edges=None, probability=None, verbose=False, visualize=False, export_dir=None):
         '''
         Description
         -----------
@@ -41,8 +45,10 @@ class Degree_Cascade:
             The number of nodes in the network.
         `n_edges` : int
             The number of edges in the network.
-        `n_failures` : int
-            The number of failures induced in the network.
+        `pr_edge` : float
+            The probability that two nodes will be connected.
+        `epsilon` : float
+            The probability that a weak node will be repaired as strong.
         `verbose` : bool
             Whether whether, per step, progression should be broadcasted. Replaces the default progress bar. 
         `visualize` : 
@@ -55,16 +61,15 @@ class Degree_Cascade:
         # Initialize the network
         self.n_nodes = n_nodes
         self.n_edges = n_edges
-        self.network = Network(n_nodes, n_edges) # create AB network with n nodes and m edges
+        self.network = Network(n_nodes, n_edges)
         
         # Initialize the state
-        self.network.set_all_statuses() # all nodes initialised with status = degree
+        self.network.set_all_statuses()
 
         # Initialize the parameters
-        self.n_failures = n_failures # number of failures induced
+        self.probability = probability
         self.n_steps = n_steps
         self.n_trials = n_trials
-        self.threshold = threshold
         
         # Initialize the current step
         self.time = 0
@@ -115,15 +120,14 @@ class Degree_Cascade:
         Runs a single step of the simulation.
         '''
         
-        # Save the current state (only used in cases of failure during degradation)
-        # before_degrade = save_state(self.network)
-
         # Randomly select given number of nodes to fail
-        # nodes_to_fail = random.sample(list(self.network.nodes), k = self.n_failures)
-        nodes_to_fail = np.random.choice(self.network.graph.nodes)
+        node_to_fail = np.random.choice(self.network.graph.nodes)
+
+        # fail first node
+        self.network.set_status(node_to_fail, 0)
 
         # initiate the recursive cascade
-        self.cascade_failures(nodes_to_fail)
+        self.cascade_failures()
 
         # Repair nodes
         self.network.set_all_statuses()
@@ -135,31 +139,8 @@ class Degree_Cascade:
         else:
             return self._visualize_network() if self.visualize else None
     
-    def recursive_cascade(self, node):
-        
-        # Base case: Stop recursion if the node has already failed
-        if self.network.get_status(node) < 1:
-            self.network.set_status(node, 0)
-            return
 
-        # Locate neighbors
-        all_neighbors = self.network.get_neighbors(node)
-
-        # retain previous status
-        prev_status = self.network.get_status(node)
-
-        # set status of failed node to 0
-        self.network.set_status(node, 0)
-            
-        # Cycle through neighbors (multiple neighbors of multiple nodes) and locate weaklings
-        for neighbor in all_neighbors:
-            if self.network.get_status(neighbor) < prev_status:
-                self.recursive_cascade(neighbor)
-
-        # Store current cascade iteration
-        self._store_cascade()  if self.exporting  else None
-
-    def cascade_failures(self, node):
+    def cascade_failures(self):
         '''
         Description
         -----------
@@ -169,12 +150,43 @@ class Degree_Cascade:
         -------
         An array containing all failed nodes of status 1.
         '''
+        # Get current statuses as values
+        current_state = np.array(list(self.network.get_all_statuses().values()))
+
+        # Initialize previous state to save
+        previous_state = np.zeros_like(current_state)
         
         # Start tracking cascade
         self._initialize_cascade()  if self.exporting  else None
 
-        # Call recursive failing function
-        self.recursive_cascade(node)
+        # Cycle until no more changes in status occur
+        while not (previous_state == current_state).all():
+            
+            previous_state = current_state
+            
+            # Find failed nodes
+            failed_nodes = np.where(current_state==0)[0]
+            
+            # Locate neighbors
+            all_neighbors = self.network.get_multiple_neighbors(failed_nodes)
+            print(list(all_neighbors))
+            print("hello")
+            
+            # Cycle through neighbors (multiple neighbors of multiple nodes) and locate weaklings
+            for neighbors in all_neighbors:
+                print(list(neighbors))
+                if neighbors:
+                    if random.uniform(0,1) < 1/2:
+                        fail(self.network, list(neighbors))
+
+            # Update current_state
+            current_state = np.array(list(self.network.get_all_statuses().values()))
+
+            # Visualize network
+            self._visualize_network() if self.visualize else None
+
+            # Store current cascade iteration
+            self._store_cascade()  if self.exporting  else None
 
         # Store results of step
         self._store_step_results() if self.exporting else None
@@ -302,9 +314,9 @@ if __name__ == "__main__":
     simulation = Degree_Cascade(
         n_steps=1000, 
         n_trials=1, 
-        n_nodes=1000,  # N^5
-        n_edges=100, 
-        n_failures = 1,
+        n_nodes=100,  # N^5
+        n_edges=3, 
+        probability=0.2, 
         verbose=False, 
         visualize=False,
         export_dir='exports/'
