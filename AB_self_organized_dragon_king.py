@@ -40,7 +40,7 @@ class Degree_Cascade:
         `n_nodes` : int
             The number of nodes in the network.
         `n_edges` : int
-            The number of edges in the network.
+            The number of edges added per node (=m)
         `n_failures` : int
             The number of failures induced in the network.
         `verbose` : bool
@@ -114,18 +114,13 @@ class Degree_Cascade:
         -----------
         Runs a single step of the simulation.
         '''
-        
-        # Save the current state (only used in cases of failure during degradation)
-        # before_degrade = save_state(self.network)
-
         # Randomly select given number of nodes to fail
-        # nodes_to_fail = random.sample(list(self.network.nodes), k = self.n_failures)
         nodes_to_fail = np.random.choice(self.network.graph.nodes)
 
         # initiate the recursive cascade
         self.cascade_failures(nodes_to_fail)
 
-        # Repair nodes
+        # Repair node statuses to represent their degree
         self.network.set_all_statuses()
 
         if self.visualize:
@@ -139,7 +134,6 @@ class Degree_Cascade:
         
         # Base case: Stop recursion if the node has already failed
         if self.network.get_status(node) < 1:
-            self.network.set_status(node, 0)
             return
 
         # Locate neighbors
@@ -246,7 +240,7 @@ class Degree_Cascade:
         node_statuses = nx.get_node_attributes(self.network.graph, 'status')
 
         # Map colors based on node statuses
-        node_colors = ['red' if status == 0 else ('yellow' if status == 1 else 'green') for status in node_statuses.values()]
+        node_colors = ['red' if status == 0 else 'green' for status in node_statuses.values()]
 
         # Draw the network with node labels
         pos = nx.spring_layout(self.network.graph)  # You can use other layout algorithms
@@ -292,18 +286,14 @@ class Degree_Cascade:
                     file.write('\n')
 
 
-def complex_contagion():
-    pass
-
-
 if __name__ == "__main__":
 
     ### EXAMPLE USAGE ###
     simulation = Degree_Cascade(
         n_steps=1000, 
         n_trials=1, 
-        n_nodes=1000,  # N^5
-        n_edges=100, 
+        n_nodes=100,  
+        n_edges=10, 
         n_failures = 1,
         verbose=False, 
         visualize=False,

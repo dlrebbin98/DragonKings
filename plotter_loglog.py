@@ -27,7 +27,7 @@ def plot_last_values_distribution():
                 last_value = list(data.values())[-1]
 
                 # Round the last value to handle floating-point variations
-                last_value_rounded = round(last_value, 1)
+                last_value_rounded = round(last_value, 2)
 
                 # Update the frequency distribution
                 last_values_distribution[last_value_rounded] = last_values_distribution.get(last_value_rounded, 0) + 1
