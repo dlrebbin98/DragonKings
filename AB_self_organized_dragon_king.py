@@ -278,7 +278,7 @@ class Degree_Cascade:
         -----------
         Exports stored results to csv file.
         '''
-        with open(f'{self.export_dir}results.txt', 'w') as file:
+        with open(f'{self.export_dir}.txt', 'w') as file:
             for trial in np.arange(self.n_trials):
                 for step in np.arange(self.n_steps):
                     # print(f"\nExporting result for trial {trial} and step {step}.")
@@ -288,19 +288,18 @@ class Degree_Cascade:
 
 if __name__ == "__main__":
 
-    ### EXAMPLE USAGE ###
-    simulation = Degree_Cascade(
-        n_steps=1000, 
-        n_trials=1, 
-        n_nodes=100,  
-        n_edges=10, 
-        n_failures = 1,
-        verbose=False, 
-        visualize=False,
-        export_dir='exports/'
-    )
-
-    # # Visualize the network at t = 0
-    # simulation._visualize_network()
-    
-    simulation.run()
+    for nodes in [1000]:
+        for m in range(1, 11):
+            for run_nr in range(6, 7):
+                simulation = Degree_Cascade(
+                    n_steps=1000, 
+                    n_trials=1, 
+                    n_nodes=nodes,  
+                    n_edges=m, 
+                    n_failures = 1,
+                    verbose=False, 
+                    visualize=False,
+                    export_dir=f'exports/results_n{nodes}_m{m}_r{run_nr}'
+                )
+                
+                simulation.run()
