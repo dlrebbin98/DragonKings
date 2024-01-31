@@ -120,6 +120,13 @@ class Degree_Cascade:
         # initiate the recursive cascade
         self.cascade_failures(nodes_to_fail)
 
+        nodes_to_reinitialize = np.argwhere(np.array(self.network.get_all_statuses().values()) == 0)
+
+        for node in nodes_to_reinitialize:
+            self.network.remove_edges_from(self.network.edges(node))  # Remove existing edges
+            new_edges = nx.barabasi_albert_graph(1, self.n_edges).edges()
+            self.network.add_edges_from(new_edges, source=node)
+
         # Repair node statuses to represent their degree
         self.network.set_all_statuses()
 
@@ -289,8 +296,8 @@ class Degree_Cascade:
 if __name__ == "__main__":
 
     for nodes in [1000]:
-        for m in range(1, 2):
-            for run_nr in range(11, 12):
+        for m in range(10, 11):
+            for run_nr in range(1, 3):
                 simulation = Degree_Cascade(
                     n_steps=1000, 
                     n_trials=1, 
@@ -299,7 +306,7 @@ if __name__ == "__main__":
                     n_failures = 1,
                     verbose=False, 
                     visualize=False,
-                    export_dir=f'exports/results_n{nodes}_m{m}_r{run_nr}'
+                    export_dir=f'exports/SOCresults_n{nodes}_m{m}_r{run_nr}'
                 )
                 
                 simulation.run()
