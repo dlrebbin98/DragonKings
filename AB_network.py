@@ -113,6 +113,24 @@ class Network:
 		for node in nodes:
 			neighbors.append(self.get_neighbors(node)) if not as_list else neighbors.append(list(self.graph.neighbors(node)))
 		return neighbors
+	
+	def remove_edges_from(self, node_to_remove, neighbors_to_remove):
+		return self.graph.remove_edges_from([(node_to_remove, neighbor) for neighbor in neighbors_to_remove])
+	
+	def add_edges_from(self, new_edges, node):
+		return self.graph.add_edges_from(new_edges, source = node)
+	
+	def add_node(self, node):
+		return self.graph.add_node(node)
+	
+	def edges(self, node):
+		return self.graph.edges(node)
+	
+	def degree(self):
+		return self.graph.degree()
+	
+	def node_degree(self, node):
+		return self.graph.degree(node)
 
 
 if __name__ == "__main__":

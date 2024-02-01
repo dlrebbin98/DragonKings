@@ -18,7 +18,7 @@ def plot_distribution(nodes=1000):
     plt.grid(True)
 
     # Define the settings of m for which you have exported results
-    m_values = range(1, 11, 9)
+    m_values = [1, 5, 10, 15]# range(5, 16, 5)
 
     # Choose a color map for the gradient
     color_map = plt.get_cmap('viridis')
@@ -28,11 +28,11 @@ def plot_distribution(nodes=1000):
         all_probabilities = []
 
         # Loop over five runs
-        for run in range(1, 2):
-            filename = f'exports/SOCresults_n{nodes}_m{m}_r{run}.txt'
+        for run in range(1, 15):
+            filename = f'exports/results_n{nodes}_m{m}_r{run}.txt'
 
             # Initialize a dictionary to store the frequency distribution of last values
-            last_values_distribution = {round(value, 2): 0.0 for value in np.arange(0, 1.01, 0.01)}
+            last_values_distribution = {round(value, 3): 0.0 for value in np.arange(0, 1.01, 0.01)}
 
             # Variable to store the total number of lines in the file
             total_lines = 0

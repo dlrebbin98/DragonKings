@@ -120,12 +120,35 @@ class Degree_Cascade:
         # initiate the recursive cascade
         self.cascade_failures(nodes_to_fail)
 
-        nodes_to_reinitialize = np.argwhere(np.array(self.network.get_all_statuses().values()) == 0)
+        #status_dict = self.network.get_all_statuses()
+        
+        
+        #print(self.network.get_all_statuses())
 
-        for node in nodes_to_reinitialize:
-            self.network.remove_edges_from(self.network.edges(node))  # Remove existing edges
-            new_edges = nx.barabasi_albert_graph(1, self.n_edges).edges()
-            self.network.add_edges_from(new_edges, source=node)
+        #print(nodes_to_reinitialize)
+
+        # Calculate the degrees of existing nodes
+        degrees = dict(self.network.degree())  
+
+        nodes_to_reinitialize = [key for key, value in degrees.items() if value == 0]
+
+        #print(nodes_to_reinitialize)
+
+        for new_node in nodes_to_reinitialize:
+            # Choose existing nodes to connect the new node based on preferential attachment
+            existing_nodes = list(degrees.keys())
+            probabilities = [degree / sum(degrees.values()) for degree in degrees.values()]
+            #print(probabilities)
+            chosen_existing_nodes = random.choices(existing_nodes, weights=probabilities, k=self.n_edges) 
+
+            # Connect the new node to existing nodes
+            # self.network.add_node(new_node)
+            self.network.add_edges_from([(new_node, existing_node) for existing_node in chosen_existing_nodes], new_node)
+
+            # Update degrees for existing nodes
+            degrees[new_node] = len(chosen_existing_nodes)
+            for existing_node in chosen_existing_nodes:
+                degrees[existing_node] += 1
 
         # Repair node statuses to represent their degree
         self.network.set_all_statuses()
@@ -139,26 +162,34 @@ class Degree_Cascade:
     
     def recursive_cascade(self, node):
         
+        # Retain previous status
+        prev_status = self.network.node_degree(node)
+
         # Base case: Stop recursion if the node has already failed
-        if self.network.get_status(node) < 1:
+        if prev_status < 1:
             return
 
+        # Set status of failed node to 0
+        self.network.set_status(node, 0)
+        
         # Locate neighbors
         all_neighbors = self.network.get_neighbors(node)
 
-        # retain previous status
-        prev_status = self.network.get_status(node)
+        recursion_subset = [neighbor for neighbor in all_neighbors if self.network.node_degree(neighbor) < prev_status]
 
-        # set status of failed node to 0
-        self.network.set_status(node, 0)
-            
-        # Cycle through neighbors (multiple neighbors of multiple nodes) and locate weaklings
-        for neighbor in all_neighbors:
-            if self.network.get_status(neighbor) < prev_status:
-                self.recursive_cascade(neighbor)
+        #print(recursion_subset)
+
+        # Remove exisiting edges
+        self.network.remove_edges_from(node, all_neighbors)
+        self.network.set_status(node, 0) 
+
+        # Cycle through neighbors and locate weaklings
+        for neighbor in recursion_subset:
+            self.recursive_cascade(neighbor)
 
         # Store current cascade iteration
-        self._store_cascade()  if self.exporting  else None
+        self._store_cascade() if self.exporting else None
+
 
     def cascade_failures(self, node):
         '''
@@ -213,11 +244,15 @@ class Degree_Cascade:
         -----------
         Returns the failure size and counter of current cascade.
         '''
+
+        #status_dict = dict(self.network.degree())
         status_values = list(self.network.get_all_statuses().values())
+        #print(status_values)
         if len(status_values) != self.n_nodes:
             raise ValueError("Length of all statuses does not match the specified number of nodes.")
 
         failures = status_values.count(0)
+        #print(failures)
 
         return self.cascade_counter, failures / len(status_values)
 
@@ -296,8 +331,8 @@ class Degree_Cascade:
 if __name__ == "__main__":
 
     for nodes in [1000]:
-        for m in range(10, 11):
-            for run_nr in range(1, 3):
+        for m in range(3, 5):
+            for run_nr in range(15, 16):
                 simulation = Degree_Cascade(
                     n_steps=1000, 
                     n_trials=1, 

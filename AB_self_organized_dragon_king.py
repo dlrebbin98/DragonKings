@@ -10,6 +10,7 @@ Running this module as a script run an example.
 
 import json
 import random
+import time
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -68,6 +69,9 @@ class Degree_Cascade:
         
         # Initialize the current step
         self.time = 0
+
+        # Initialize position for graph
+        self.initial_pos = None
 
         # Initialize flags
         self.verbose = verbose
@@ -144,6 +148,9 @@ class Degree_Cascade:
 
         # set status of failed node to 0
         self.network.set_status(node, 0)
+
+        if self.visualize:
+                self._visualize_network()
             
         # Cycle through neighbors (multiple neighbors of multiple nodes) and locate weaklings
         for neighbor in all_neighbors:
@@ -166,6 +173,9 @@ class Degree_Cascade:
         
         # Start tracking cascade
         self._initialize_cascade()  if self.exporting  else None
+
+        # Visualise the initialisation
+        self._visualize_network()
 
         # Call recursive failing function
         self.recursive_cascade(node)
@@ -232,9 +242,8 @@ class Degree_Cascade:
         -----------
         Visualize the network.
         
-        red: failed nodes.
-        yellow: weak nodes.  
-        green: strong nodes.
+        red: failed nodes. 
+        green: standing nodes.
         '''
         # Extract node statuses
         node_statuses = nx.get_node_attributes(self.network.graph, 'status')
@@ -242,9 +251,20 @@ class Degree_Cascade:
         # Map colors based on node statuses
         node_colors = ['red' if status == 0 else 'green' for status in node_statuses.values()]
 
-        # Draw the network with node labels
-        pos = nx.spring_layout(self.network.graph)  # You can use other layout algorithms
-        nx.draw(self.network.graph, pos, node_color=node_colors, with_labels=True, labels=node_statuses)
+        # Map node sizes based on node statuses (you can adjust the scaling factor as needed)
+        node_sizes = [status * 100 if status > 0 else 100 for status in node_statuses.values()]
+
+        # Determine layout
+        if self.initial_pos is None:
+            # First visualization, compute initial positions
+            self.initial_pos = nx.spring_layout(self.network.graph)
+            pos = self.initial_pos
+        else:
+            # Use the stored initial positions for subsequent visualizations
+            pos = self.initial_pos
+
+        # Draw the network with node labels and sizes
+        nx.draw(self.network.graph, pos, node_color=node_colors, with_labels=True, labels=node_statuses, node_size=node_sizes)
         
         plt.title(f"Time Step: {self.time}")
         plt.show()
@@ -288,18 +308,25 @@ class Degree_Cascade:
 
 if __name__ == "__main__":
 
-    for nodes in [1000]:
-        for m in range(1, 2):
-            for run_nr in range(11, 12):
+    for nodes in [20]:
+        for m in range(2, 3):
+            for run_nr in range(1, 2):
+                start_time = time.time()
                 simulation = Degree_Cascade(
-                    n_steps=1000, 
+                    n_steps=1, 
                     n_trials=1, 
                     n_nodes=nodes,  
                     n_edges=m, 
                     n_failures = 1,
                     verbose=False, 
-                    visualize=False,
+                    visualize=True,
                     export_dir=f'exports/results_n{nodes}_m{m}_r{run_nr}'
                 )
                 
                 simulation.run()
+
+                end_time = time.time()
+                elapsed_time = end_time - start_time
+
+                print(f"Runtime for n={nodes}, m={m}, run_nr={run_nr}: {elapsed_time} seconds")
+                
