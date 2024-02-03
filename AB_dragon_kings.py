@@ -1,35 +1,30 @@
 '''
-This module contains an implementation of the 'self-organized dragon king' model by Lin et al (2018).
+This module contains an altered implementation of the 'self-organized dragon king' model by Lin et al (2018).
 
-The model consists of two versions:
-    1. Inoculation or IN:
-        a. Nodes of status 1 (weak) fail if 1 or more neighbors fail.
-        b. Nodes of status 2 (strong) cannot fail.
-    
-    2. TODO Complex contagion or CC:
-        a. Nodes of status 1 (weak) fail if 1 or more neighbors fail.
-        b. Nodes of status 2 (strong) fail if 2 or more neighbors fail.
+The model consists of a version where a given number of nodes are randomly selected to fail, setting their status to 0
+before all other neighbouring nodes are checked for whether their own status falls to 0 or below so that they fail themselves. 
+The cascade continues until no more node is induced to fail.
 
 Running this module as a script run an example.
 '''
 
 import json
+import time
 
 import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from network import Network
-from network_modifier import degrade, fail, save_state, load_state, reinforce
+from AB_network import Network
 
 
-class Inoculation:
+class Degree_Cascade:
     
     '''
     Class to simulate the inoculation version of the self-organized dragon king model.
     '''
 
-    def __init__(self, n_steps, n_trials, n_nodes, n_edges=None, pr_edge=None, epsilon=0.2, verbose=False, visualize=False, export_dir=None):
+    def __init__(self, n_steps, n_trials, n_nodes, n_edges=None, n_failures = None, verbose=False, visualize=False, export_dir=None):
         '''
         Description
         -----------
@@ -44,11 +39,9 @@ class Inoculation:
         `n_nodes` : int
             The number of nodes in the network.
         `n_edges` : int
-            The number of edges in the network.
-        `pr_edge` : float
-            The probability that two nodes will be connected.
-        `epsilon` : float
-            The probability that a weak node will be repaired as strong.
+            The number of edges added per node (=m)
+        `n_failures` : int
+            The number of failures induced in the network.
         `verbose` : bool
             Whether whether, per step, progression should be broadcasted. Replaces the default progress bar. 
         `visualize` : 
@@ -60,20 +53,22 @@ class Inoculation:
 
         # Initialize the network
         self.n_nodes = n_nodes
-        self.n_edges = n_edges
-        self.pr_edge = pr_edge
-        self.network = Network(n_nodes, n_edges, pr_edge)
+        self.n_edges = n_edges # parameter m
+        self.network = Network(n_nodes, n_edges) # create AB network with n nodes and m edges
         
         # Initialize the state
-        self.network.set_all_statuses(1)
+        self.network.set_all_statuses() # all nodes initialised with status = degree
 
         # Initialize the parameters
-        self.epsilon = epsilon
+        self.n_failures = n_failures # number of failures induced - only one allowed for in this version
         self.n_steps = n_steps
         self.n_trials = n_trials
         
         # Initialize the current step
         self.time = 0
+
+        # Initialize position for graph
+        self.initial_pos = None
 
         # Initialize flags
         self.verbose = verbose
@@ -105,7 +100,7 @@ class Inoculation:
                 self.step()
 
             # Re-initialize the network
-            self.network = Network(self.n_nodes, self.n_edges, self.pr_edge)
+            self.network = Network(self.n_nodes, self.n_edges)
 
         print('\nSimulation completed.')
         
@@ -120,36 +115,54 @@ class Inoculation:
         -----------
         Runs a single step of the simulation.
         '''
-        
-        # Save the current state (only used in cases of failure during degradation)
-        before_degrade = save_state(self.network)
+        # Randomly select given number of nodes to fail
+        nodes_to_fail = np.random.choice(self.network.graph.nodes)
 
-        # Degrade a node at random
-        degrade(self.network, random=True)
+        # initiate the recursive cascade
+        self.cascade_failures(nodes_to_fail)
 
-        if self.contains_failed_nodes():
-            
-            # Store first failure size
-            # self._store_results(1, self.trial, step) if self.exporting else None
+        # Repair node statuses to represent their degree
+        self.network.set_all_statuses()
 
-            # Cascade failures until no more failures occur
-            failed_nodes = self.cascade_failures()
-
-            # Repair nodes
-            load_state(self.network, before_degrade)
-
-            # Reinforce some of the failed nodes with status 1 given epsilon
-            reinforce(self.network, failed_nodes, self.epsilon)
-
-            if self.visualize:
-                return self._visualize_network()
+        if self.visualize:
+            return self._visualize_network()
 
         # Otherwise (i.e. no failure), end the step
         else:
             return self._visualize_network() if self.visualize else None
     
+    def recursive_cascade(self, node):
+        '''
+        Description
+        -----------
+        Takes a selected node as input, and calls the same function recursively for every neighbor
+        whose status falls below its own. Returns if the node is already failed.
+        '''
+        # Base case: Stop recursion if the node has already failed
+        if self.network.get_status(node) < 1:
+            return
 
-    def cascade_failures(self):
+        # Locate neighbors
+        all_neighbors = self.network.get_neighbors(node)
+
+        # retain previous status
+        prev_status = self.network.get_status(node)
+
+        # set status of failed node to 0
+        self.network.set_status(node, 0)
+
+        if self.visualize:
+                self._visualize_network()
+            
+        # Cycle through neighbors (multiple neighbors of multiple nodes) and locate weaklings
+        for neighbor in all_neighbors:
+            if self.network.get_status(neighbor) < prev_status:
+                self.recursive_cascade(neighbor)
+
+        # Store current cascade iteration
+        self._store_cascade()  if self.exporting  else None
+
+    def cascade_failures(self, node):
         '''
         Description
         -----------
@@ -159,72 +172,18 @@ class Inoculation:
         -------
         An array containing all failed nodes of status 1.
         '''
-        # Get current statuses as values
-        current_state = np.array(list(self.network.get_all_statuses().values()))
-
-        # Initialize previous state to save
-        previous_state = np.zeros_like(current_state)
         
         # Start tracking cascade
         self._initialize_cascade()  if self.exporting  else None
-        
-        ### NOTE ###
-        # 
-        # The following cascading mechanism is a bit of a mess.
-        # 
-        # I think it can be simplified by circumventing the while loop
-        # and just focusing on the final state of the network.
-        #
-        # In particular, as we know the neighbors of each node, we can 
-        # concatenate all the neighbors and immediately adjust their 
-        # statuses.
-        # 
-        ############
 
-        # Cycle until no more changes in status occur
-        while not (previous_state == current_state).all():
-            
-            previous_state = current_state
-            
-            # Find failed nodes
-            failed_nodes = np.where(current_state==0)[0]
-            
-            # Locate neighbors
-            all_neighbors = self.network.get_multiple_neighbors(failed_nodes)
-            
-            # Cycle through neighbors (multiple neighbors of multiple nodes) and locate weaklings
-            for neighbors in all_neighbors:
+        # Visualise the initialisation
+        self._visualize_network()
 
-                fail(self.network, list(neighbors))
-
-            # Update current_state
-            current_state = np.array(list(self.network.get_all_statuses().values()))
-
-            # Visualize network
-            self._visualize_network() if self.visualize else None
-
-            # Store current cascade iteration
-            self._store_cascade()  if self.exporting  else None
+        # Call recursive failing function
+        self.recursive_cascade(node)
 
         # Store results of step
         self._store_step_results() if self.exporting else None
-
-        return failed_nodes
-
-
-    def contains_failed_nodes(self):
-        '''
-        Description
-        -----------
-        Checks if the network contains failed nodes.
-
-        Returns
-        -------
-        `True` if the network contains failed nodes, `False` otherwise.
-        '''
-        print(f'Result of contains_failed_nodes method: {0 in self.network.get_all_statuses().values()}') if self.verbose else None
-        print(f'Found the following failured nodes: {np.argwhere(np.array(self.network.get_all_statuses().values()) == 0)}') if self.verbose else None
-        return 0 in self.network.get_all_statuses().values()
     
 
     def _initialize_cascade(self):
@@ -270,14 +229,30 @@ class Inoculation:
         -----------
         Visualize the network.
         
-        red: failed nodes.
-        yellow: weak nodes.  
-        green: strong nodes.
+        red: failed nodes. 
+        green: standing nodes.
         '''
-        nx.draw(
-                self.network.graph, 
-                node_color=['red' if self.network.graph.nodes[node]['status'] == 0 else ('yellow' if self.network.graph.nodes[node]['status'] == 1 else 'green') for node in self.network.graph.nodes]
-                )
+        # Extract node statuses
+        node_statuses = nx.get_node_attributes(self.network.graph, 'status')
+
+        # Map colors based on node statuses
+        node_colors = ['red' if status == 0 else 'green' for status in node_statuses.values()]
+
+        # Map node sizes based on node statuses (you can adjust the scaling factor as needed)
+        node_sizes = [status * 100 if status > 0 else 100 for status in node_statuses.values()]
+
+        # Determine layout
+        if self.initial_pos is None:
+            # First visualization, compute initial positions
+            self.initial_pos = nx.spring_layout(self.network.graph)
+            pos = self.initial_pos
+        else:
+            # Use the stored initial positions for subsequent visualizations
+            pos = self.initial_pos
+
+        # Draw the network with node labels and sizes
+        nx.draw(self.network.graph, pos, node_color=node_colors, with_labels=True, labels=node_statuses, node_size=node_sizes)
+        
         plt.title(f"Time Step: {self.time}")
         plt.show()
 
@@ -310,7 +285,7 @@ class Inoculation:
         -----------
         Exports stored results to csv file.
         '''
-        with open(f'{self.export_dir}results.txt', 'w') as file:
+        with open(f'{self.export_dir}.txt', 'w') as file:
             for trial in np.arange(self.n_trials):
                 for step in np.arange(self.n_steps):
                     # print(f"\nExporting result for trial {trial} and step {step}.")
@@ -318,26 +293,27 @@ class Inoculation:
                     file.write('\n')
 
 
-def complex_contagion():
-    pass
-
-
 if __name__ == "__main__":
 
-    ### EXAMPLE USAGE ###
-    simulation = Inoculation(
-        n_steps=1000, 
-        n_trials=1, 
-        n_nodes=10_000,  # N^5
-        n_edges=30_000, 
-        pr_edge=False,
-        epsilon=0.001, 
-        verbose=False, 
-        visualize=False,
-        export_dir='exports/'
-    )
+    for nodes in [1000]:
+        for m in range(5, 16, 5):
+            for run_nr in range(1, 21):
+                start_time = time.time()
+                simulation = Degree_Cascade(
+                    n_steps=1000, 
+                    n_trials=1, 
+                    n_nodes=nodes,  
+                    n_edges=m, 
+                    n_failures = 1,
+                    verbose=False, 
+                    visualize=False, # set only to true for small n of steps
+                    export_dir=f'exports/results_n{nodes}_m{m}_r{run_nr}'
+                )
+                
+                simulation.run()
 
-    # # Visualize the network at t = 0
-    # simulation._visualize_network()
-    
-    simulation.run()
+                end_time = time.time()
+                elapsed_time = end_time - start_time
+
+                print(f"Runtime for n={nodes}, m={m}, run_nr={run_nr}: {elapsed_time} seconds")
+                

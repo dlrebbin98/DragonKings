@@ -12,7 +12,7 @@ def plot_distribution_powerlaw(nodes=1000):
     plt.grid(True)
 
     # Define the settings of m for which you have exported results
-    m_values = [2, 5, 10, 15] # range(10, 16, 5)
+    m_values = [5, 10, 15] # range(10, 16, 5)
 
     # Choose a color map for the gradient
     color_map = plt.get_cmap('viridis')
@@ -39,7 +39,7 @@ def plot_distribution_powerlaw(nodes=1000):
 
                         last_value_int = int(last_value_rounded*1000)
 
-                        print(last_value_int)
+                        # print(last_value_int)
 
                         all_values.append(last_value_int)
 
@@ -49,22 +49,19 @@ def plot_distribution_powerlaw(nodes=1000):
 
         # Create a powerlaw Fit object
         fit = powerlaw.Fit(all_values, discrete=True)
-        #print(fit.alpha)
+        alpha = round(fit.alpha, 2)
 
         # Get color based on the m value
         color = color_map((m - min(m_values)) / (max(m_values) - min(m_values)))
-
-        xmin = fit.power_law.xmin
-        print(xmin)
 
         #p = fit.distribution_compare('power_law', 'lognormal')
         #print(p)
 
         # Plot the power-law fit on a log-log scale
-        fit.plot_pdf(color=color, linewidth=2, label=f'm={m}', linestyle='-')
+        fit.plot_pdf(color=color, linewidth=2, label=f'm = {m}', linestyle='-')
 
         # Fitted idealised power law
-        fit.power_law.plot_pdf(color=color, linewidth=1, label=f'm={m}', linestyle='--')
+        fit.power_law.plot_pdf(color=color, linewidth=1, label=f'm = {m} (alpha = {alpha})', linestyle='--')
 
     plt.xscale('log')
     plt.yscale('log')
@@ -74,3 +71,5 @@ def plot_distribution_powerlaw(nodes=1000):
 
 # Call the function
 plot_distribution_powerlaw(nodes=1000)
+
+

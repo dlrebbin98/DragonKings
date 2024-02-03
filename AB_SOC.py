@@ -6,6 +6,12 @@ before all other neighbouring nodes are checked for whether their own status fal
 The cascade continues until no more node is induced to fail.
 
 Running this module as a script run an example.
+
+-------
+
+UNFINISHED
+
+
 '''
 
 import json

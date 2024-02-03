@@ -50,7 +50,7 @@ def plot_last_values_distribution(nodes = 1000, m = 1, run = 1):
     probabilities = {key: value / total_lines for key, value in last_values_distribution.items()}
 
     # Plot the probability distribution of last values using triangles
-    plt.plot(list(probabilities.keys()), list(probabilities.values()), marker='^', linestyle='None')
+    plt.plot(list(probabilities.keys()), list(probabilities.values()), marker='o', linestyle='None')
 
     plt.show()
 
